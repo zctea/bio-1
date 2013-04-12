@@ -88,7 +88,7 @@ class GeoFile:
         #find the column position of genes
         gene_pos = []
         for gene in gene_list:
-            #if self.geneID.has_key(str(gene)):
+            if self.geneID.has_key(str(gene)):
              gene_pos.append(self.geneID[str(gene)])
         print len(gene_pos)
 
@@ -138,7 +138,7 @@ class GeoFile:
         
         head = 1
         for  f in os.listdir("."):
-            if f.endswith(".gene"):
+            if f.endswith(".t"):
                 tf = open(f,"r")
                 if head == 1:
                     head = 0  #write the head
@@ -149,6 +149,41 @@ class GeoFile:
                 tf.close() 
         mf.close()
 
+    def dot2space(self):
+        fname =  self.file_basename
+        fname += ".t"
+        csv_in =  open(fname,'rb') 
+        csv_out =  open(self.file_basename+'.space','wb') 
+        fwriter = csv.writer(csv_out,delimiter='\t')
+        col_id =  0 
+        for row in csv_in:
+            line = row.strip().split(',')
+            if col_id == 0:
+                size = len(line)
+                id_line = []
+                id_line.insert(0,"ID")
+                for value in range(size):
+                    id_line.append(value)               
+                fwriter.writerow(id_line)
+                
+            line.insert(0,col_id)
+            fwriter.writerow(line)
+            col_id += 1
+        csv_in.close()
+        csv_out.close()
+    
+    def space2dot(self):
+        fname =  self.file_basename
+        fname += ".sparcc"
+        csv_in =  open(fname,'rb') 
+        csv_out =  open(self.file_basename+'.nsparcc','wb') 
+        fwriter = csv.writer(csv_out,delimiter=',')
+        for row in csv_in:
+            line = row.strip().split('\t')
+            fwriter.writerow(line)
+        csv_in.close()
+        csv_out.close()
+    
 if __name__ == "__main__":
     parser = OptionParser()
     parser.add_option("-f","--file",dest="filename",help="imput file name", metavar = "FILE")
@@ -159,6 +194,8 @@ if __name__ == "__main__":
     parser.add_option("-m","--metainfo",action="store_true",dest="metainfo",help="dump the metainfo of dataset")
     parser.add_option("-c","--merge",action="store_true",dest="merge",help="merge all the .gene file to a single file")
     parser.add_option("-i","--info",action="store_true",dest="info",help="show info")
+    parser.add_option("-o","--dot2space",action="store_true",dest="dot2space",help="change the delimiter of .csv file")
+    parser.add_option("-s","--space2dot",action="store_true",dest="space2dot",help="change the delimiter of .csv file")
 
     (options,args) = parser.parse_args()
 
@@ -194,3 +231,13 @@ if __name__ == "__main__":
     if options.info is True:
         gf = GeoFile()
         gf.load_file(options.filename)
+
+    if options.dot2space is True:
+        gf = GeoFile()
+        gf.load_file(options.filename)
+        gf.dot2space()
+    
+    if options.space2dot is True:
+        gf = GeoFile()
+        gf.load_file(options.filename)
+        gf.space2dot()
