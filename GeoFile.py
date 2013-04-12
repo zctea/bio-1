@@ -24,17 +24,13 @@ class GeoFile:
 
     def load_file(self,file_name):
         """ load .csv data file and store into list """
-        self.file_basename = file_name
-        dot_pos = str.rfind(self.file_basename,".")
-        if dot_pos is not 0:
-            self.file_basename = self.file_basename[:dot_pos]
-        with open(file_name,'rb') as csvfile:
+        self.file_basename = str(file_name).strip().split('.')[0]
+        with open(str(file_name),'rb') as csvfile:
              f = csv.reader(csvfile,delimiter=',')
              for row in f:
                 self.data.append(row)
         """ calcualte the shape of data """
         self.shape = (len(self.data),len(self.data[0]))
-
         self.split_metainfo()
 
         print "data shape: " + str(self.shape)
