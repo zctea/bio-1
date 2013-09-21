@@ -1,114 +1,137 @@
-#!/usr/bin/pthon2.6
+#!/usr/bin/python
 """
-processing the Gene data
+processing the Microarray Expression Dataset 
 
-!!! the input data are pure float numbers, and not metainfo!!!!
-get rid of them before you call this program!
+an example of dataset:
 
-"",     gene_0, gene_1,gene_2,
--------------------------
-"s0" | 1.0,  2.0,  3.0
-"s1" | 3.0,  4.0,  ...
-"s2" | ...
+"",     sample1, sample_2,sample_3,
+"gene1"  1.0,  2.0,  3.0
+"gene2"  3.0,  4.0,  ...
+"gene3"  ...
 
+shuchu.han@gmail.com
 """
-
 
 import sys,os
 from optparse import OptionParser
 from operator import itemgetter
-from sets import Set
+##from sets import Set
 import csv
 import numpy as np
 
 class DataProc:
     def __init__(self):
         self.fname = ""
+        self.genes = []
+        self.samples = []
+        self.data = ""
 
     def loadcsv(self,fname):
-        """ load .csv data file and store into a numpy array """
+        """ 
+          Load the .csv file in two run.
+          1) first run:
+            load the gene names and sample names
+          2) second run:
+            load the data by using the numpy.genfromtxt()
+        """
+        
+        # get the the base file namne
         self.fname = fname
         dot_pos = str.rfind(self.fname,".")
         if dot_pos is not 0:
             self.fname = self.fname[:dot_pos]
-        data =  np.genfromtxt(fname, dtype=float,delimiter=",")
-        return data
-
-    def pcc(self,fname):
-        data = self.loadcsv(fname) 
-        matdata = np.asmatrix(data) #transfer to numpy matrix
-        E = matdata.mean(1) #expectation
-        SD = matdata.std(1) #standard deviation
-        #print E
-        #print SD
-        print "Data Matrix shape: "+ str(matdata.shape)
-        matshape = matdata.shape
         
-        for i in range(matshape[0]):
-            for j in range(matshape[1]): 
-                if SD[i] != 0.0 :
-                    matdata[i,j] = (matdata[i,j] - E[i]) / SD[i]
-                    #print str(i) + str(j) + str(matdata[i,j])
-                    
-        #result = np.absolute(matdata * matdata.T) # absolute PCC
-        result = matdata * matdata.T # PCC
-        result = result / int(matshape[1]-1) # divided by number of samples 
-
-        ## minus the identity matrix
-        #for i in range(result.shape[0]):
-            #result[i,i] = 0.0
+        # load gene names and sample names
+        with open(str(fname),'rb') as csvfile:
+          f = csv.reader(csvfile,delimiter=',')
+          first_line_flag = True
+          for row in f:
+            line_field = row
+            if first_line_flag:
+              self.samples = line_field
+              first_line_flag = False
+            else:
+              self.genes.append(line_field[0])
         
-        np.savetxt(self.fname+".pcc",result,delimiter=",",fmt="%1.5f")
-        print "Result PCC Matrix shape: "+ str(result.shape)
+        # load the data to numpy by using genfromtxt()
+        # skip the first row, and the first column
+        self.data = np.genfromtxt(fname, dtype=float,delimiter=",",\
+                                  skip_header=1,usecols = range(1,len(self.samples)-1))
+        return 0                          
 
-    def topvalue(self,fname,numtops):
-        """ load the top 'numtops' pairs fron datai matrix """ 
-        data = self.loadcsv(fname)
-        """ stupid method below """
-        ### make a copy of the data 
-        ds = data.shape
-        values = [] 
-        for j in range(0,ds[0]):
-            for i in range(j+1,ds[1]):
-                values.append((data[i,j],i,j))
+    def save_genes(self):
+      sample_fname = self.fname + '_samles.csv'
+      with open(sample_fname,'wb') as csvfile:
+        f = csv.writer(csvfile,delimiter=',')
+        f.writerow(self.samples)  ## wirte the samples name to the first row
+      
+      genes_fname = self.fname + '_genes.csv'
+      with open(genes_fname,'wb') as csvfile:
+        f = csv.writer(csvfile,delimiter=',')
+        f.writerow(self.genes)  ## wirte the samples name to the first row
+      
+      data_fname = self.fname + '_data.csv'
+      np.savetxt(data_fname,self.data,fmt='%10.4f',delimiter=',')
+      return 0
         
-        top_value = sorted(values,key=itemgetter(0),reverse=True)[:int(numtops)]
+    def clean_dup_genes(self,method):
+      """
+        For each duplicated genes, keep the one with largest SD, remove others.
+      """
 
-        ### dump top values
-        f = open(self.fname+".topvalues","w")
-        for p in top_value:
-            f.write(str(p))
-            f.write(os.linesep)
-        f.close()
-
-        ### write gene IDs ###
-        top_id = Set() 
-        for i in range(0,len(top_value)):
-            top_id.add(top_value[i][1])
-            top_id.add(top_value[i][2])
-
-        f = open(self.fname+".top",'w')
-        for i in top_id:
-            f.write("%s\n" %  i)
-        f.close()
-        """
-        genes = []
-        for i in range(0,len(data)):
-            genes.append((np.amax(data[i]),i))
-        t = sorted(genes,key=itemgetter(0),reverse=True)[:int(numtops)]
-        f = open(self.fname+".top",'w')
-        for i in t:
-            f.write("%s\n" % i[1])
-        f.close()
-        """
+      unwanted_lines = []
+      len_of_genes = len(self.genes)
+      for i in range(0,len_of_genes):
+        checking_item = self.genes[i]
+        dup_list = [i]
+        for j in range(i+1,len_of_genes):
+          if self.genes[j] == checking_item:
+            dup_list.append(j)
         
+        if len(dup_list) > 1:
+            alived_line = -1 
+            if method == "SD":
+              alived_line = self._highest_SD(dup_list)
+            
+            if alived_line != -1:
+              dup_list.remove(alived_line)
+            
+            if len(dup_list) > 0:
+                for k in dup_list:
+                    unwanted_lines.append(k)   
+
+      # now removing
+      print "Number of lines to be deleted from array: %d\n" % len(unwanted_lines)
+      self.data = np.delete(self.data,unwanted_lines,0)
+      new_genes = []
+      for id, item in enumerate(self.genes):
+          if unwanted_lines.count(id) == 0:
+              new_genes.append(item)
+      self.genes = new_genes
+      return 0
+
+    def _highest_SD(self,dup_list):
+      """
+        Find the line which has highest SD
+      """
+      max_index = -1
+      if len(dup_list) > 0:
+        SD = []
+        for i in dup_list:
+          line = self.data[i]
+          sd = np.std(line)
+          SD.append(SD)
+        
+        max_index = SD.index(max(SD))
+
+      return dup_list[max_index]
 
 if __name__ == "__main__":
     parser = OptionParser()
     parser.add_option("-f","--file",dest="filename",help="imput file name", metavar = "FILE")
-    parser.add_option("-p","--pcc",action="store_true",dest="pcc",help="pearson correlation coefficient",metavar="PCC")
-    parser.add_option("-s","--sort",action="store_true",dest="sort",help="sort the value of matrix element")
-
+    parser.add_option("-c","--clean",action="store_true",dest="clean_dup_genes",\
+                      help="clean the duplicate genes")
+   
     (options,args) = parser.parse_args()
 
     if options.filename is None:
@@ -116,10 +139,9 @@ if __name__ == "__main__":
         parser.print_help()
         sys.exit(-1)
     
-    if options.pcc is True:
+    if options.clean_dup_genes is True:
         dp = DataProc()
-        dp.pcc(options.filename)
+        dp.loadcsv(options.filename)
+        dp.clean_dup_genes("SD")
+        dp.save_genes()
 
-    if options.sort is True:
-        dp = DataProc()
-        dp.topvalue(options.filename,50)
